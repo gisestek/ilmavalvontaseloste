@@ -61,8 +61,9 @@ function applyTheme(theme) {
     document.body.classList.add(theme);
 
     const btn = document.getElementById('toggleThemeBtn');
-    btn.textContent = theme === 'dark' ? '☀️ Vaalea tila' : '🌙 Tumma tila';
+    btn.textContent = theme === 'dark' ? '☀️ Vaalea tila' : '🩸 Tumma punasävy';
 }
+
 };
 
 // --- Event Handlers ---
