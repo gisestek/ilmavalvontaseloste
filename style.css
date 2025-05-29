@@ -1,0 +1,190 @@
+/* Yleinen ulkoasu */
+body {
+    font-family: sans-serif;
+    display: flex;
+    margin: 10px;
+    background-color: #121212;
+    color: #f0f0f0;
+    height: calc(100vh - 20px);
+}
+
+.controls {
+    margin-right: 20px;
+    padding: 15px;
+    background-color: #1e1e1e;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.6);
+    min-width: 320px;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.controls h2, .controls h3 {
+    margin-top: 0;
+    color: #ffffff;
+}
+
+label {
+    display: block;
+    margin-top: 10px;
+    font-weight: bold;
+    color: #bbbbbb;
+}
+
+input[type="text"],
+input[type="number"] {
+    width: calc(100% - 12px);
+    padding: 8px;
+    margin-top: 5px;
+    border: 1px solid #444;
+    border-radius: 4px;
+    background-color: #222;
+    color: #f0f0f0;
+}
+
+button {
+    background-color: #007bff;
+    color: white;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 15px;
+    font-size: 16px;
+}
+
+button:hover {
+    background-color: #0056b3;
+}
+
+.delete-btn {
+    background-color: #dc3545;
+    font-size: 12px;
+    padding: 5px 10px;
+    margin-top: 0;
+}
+
+.delete-btn:hover {
+    background-color: #c82333;
+}
+
+.map-and-table-container {
+    display: flex;
+    flex-grow: 1;
+}
+
+.main-content {
+    margin-right: 10px;
+}
+
+#mapCanvas {
+    border: 1px solid #444;
+    background-color: #e0f0d0; /* pysyvästi vaaleanvihreä */
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.5);
+}
+
+
+.table-container {
+    min-width: 350px;
+    padding: 10px;
+    background-color: #1e1e1e;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.6);
+    overflow-y: auto;
+    height: 800px;
+}
+
+.table-container h3 {
+    color: #ffffff;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    font-size: 13px;
+    color: #f0f0f0;
+}
+
+th, td {
+    border: 1px solid #333;
+    padding: 6px;
+    text-align: left;
+}
+
+th {
+    background-color: #2a2a2a;
+    color: #dddddd;
+}
+
+tr:nth-child(even) {
+    background-color: #181818;
+}
+
+.input-group {
+    margin-bottom: 15px;
+}
+
+.section {
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #333;
+}
+
+.section:last-child {
+    border-bottom: none;
+}
+
+/* Light theme */
+
+
+body.light {
+    background-color: #f0f0f0;
+    color: #111;
+}
+
+body.light .controls,
+body.light .table-container {
+    background-color: #ffffff;
+    color: #111;
+}
+
+body.light input,
+body.light select,
+body.light textarea {
+    background-color: #fff;
+    color: #000;
+    border-color: #ccc;
+}
+
+body.light label,
+body.light h2,
+body.light h3 {
+    color: #111;
+}
+
+body.light th {
+    background-color: #e9ecef;
+    color: #000;
+}
+
+body.light td {
+    background-color: #ffffff;
+    color: #000;
+}
+
+body.light .delete-btn {
+    background-color: #dc3545;
+    color: #fff;
+}
+
+body.light .delete-btn:hover {
+    background-color: #c82333;
+}
+
+body.light button {
+    color: #fff;
+}
+

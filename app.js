@@ -42,6 +42,27 @@ window.onload = () => {
 
     // 3. Recalculate map origin to center ownPosition (if set) and draw everything
     recalculateMapOriginAndRedraw();
+
+    // --- Theme toggle ---
+    const toggleThemeBtn = document.getElementById('toggleThemeBtn');
+    toggleThemeBtn.addEventListener('click', () => {
+    const isDark = document.body.classList.contains('dark');
+    const newTheme = isDark ? 'light' : 'dark';
+    applyTheme(newTheme);
+    localStorage.setItem('theme', newTheme);
+});
+
+// Theme setup on load
+const savedTheme = localStorage.getItem('theme') || 'dark';
+applyTheme(savedTheme);
+
+function applyTheme(theme) {
+    document.body.classList.remove('light', 'dark');
+    document.body.classList.add(theme);
+
+    const btn = document.getElementById('toggleThemeBtn');
+    btn.textContent = theme === 'dark' ? '☀️ Vaalea tila' : '🌙 Tumma tila';
+}
 };
 
 // --- Event Handlers ---
