@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ilmavalvontaseloste</title>
+    <style>
+        body { font-family: sans-serif; display: flex; margin: 10px; background-color: #f0f0f0; height: calc(100vh - 20px);}
+        .controls { margin-right: 20px; padding: 15px; background-color: #fff; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); min-width: 320px; display: flex; flex-direction: column; overflow-y: auto; }
+        .controls h2, .controls h3 { margin-top: 0; color: #333; }
+        label { display: block; margin-top: 10px; font-weight: bold; color: #555; }
+        input[type="text"], input[type="number"] {
+            width: calc(100% - 12px); padding: 8px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px;
+        }
+        button {
+            background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; margin-top: 15px; font-size: 16px;
+        }
+        button:hover { background-color: #0056b3; }
+        .delete-btn { background-color: #dc3545; font-size: 12px; padding: 5px 10px; margin-top: 0; }
+        .delete-btn:hover { background-color: #c82333; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; } /* Reduced margin-top */
+        th, td { border: 1px solid #ddd; padding: 6px; text-align: left; font-size: 13px; } /* Reduced padding */
+        th { background-color: #e9ecef; }
+        
+        .map-and-table-container { display: flex; flex-grow: 1; }
+        .main-content { margin-right: 10px; /* Space between canvas and table */ }
+        #mapCanvas { border: 1px solid black; background-color: #e0f0ff; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        
+        .input-group { margin-bottom: 15px; }
+        .table-container { 
+            min-width: 350px; /* Adjust as needed */
+            padding: 10px; 
+            background-color: #fff; 
+            border-radius: 8px; 
+            box-shadow: 0 0 10px rgba(0,0,0,0.1); 
+            overflow-y: auto; 
+            height: 800px; /* Match canvas height */
+        }
+        .section { margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #eee;}
+        .section:last-child { border-bottom: none; }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <h2>Ilmavalvontaseloste</h2>
+
+        <div class="section">
+            <h3>Maaliraportti</h3>
+            <form id="reportForm">
+                <div class="input-group">
+                    <label for="targetId">Maalin numero:</label>
+                    <input type="text" id="targetId" name="targetId" required>
+                </div>
+                <div class="input-group">
+                    <label for="mgrs">MGRS-piste (esim. NG67):</label>
+                    <input type="text" id="mgrs" name="mgrs" required>
+                </div>
+                <div class="input-group">
+                    <label for="direction">Suunta (astetta, 0-359):</label>
+                    <input type="number" id="direction" name="direction" min="0" max="359" required>
+                </div>
+                <div class="input-group">
+                    <label for="altitude">Korkeus:</label>
+                    <input type="text" id="altitude" name="altitude">
+                </div>
+                <div class="input-group">
+                    <label for="speed">Nopeus:</label>
+                    <input type="text" id="speed" name="speed">
+                </div>
+                <div class="input-group">
+                    <label for="count">Lukumäärä:</label>
+                    <input type="text" id="count" name="count" min="1">
+                </div>
+                <div class="input-group">
+                    <label for="extra">Lisätiedot:</label>
+                    <input type="text" id="extra" name="extra">
+                </div>
+                <button type="submit">Lisää Raportti</button>
+            </form>
+        </div>
+
+        <div class="section">
+            <h3>Kartta-asetukset</h3>
+            <div class="input-group">
+                <label for="mapDiameterInput">Kartan halkaisija (km):</label>
+                <input type="number" id="mapDiameterInput" name="mapDiameterInput" value="300" min="50" max="2000">
+            </div>
+            <button id="updateMapSettingsBtn">Päivitä Kartan Halkaisija</button>
+        </div>
+
+        <div class="section">
+            <h3>Oma Sijainti</h3>
+            <div class="input-group">
+                <label for="ownPositionInput">Oma MGRS (esim. MH55):</label>
+                <input type="text" id="ownPositionInput" name="ownPosition" value="MP48">
+                <button id="setOwnPosBtn">Aseta Oma Sijainti</button>
+            </div>
+            <div class="input-group">
+                <label for="warningRadiusInput">Varoituskehä (km):</label>
+                <input type="number" id="warningRadiusInput" name="warningRadius" value="100" min="10" max="1000">
+            </div>
+                <div class="input-group">
+                <label for="alertRadiusInput">Hälytyskehä (km):</label>
+                <input type="number" id="alertRadiusInput" name="alertRadius" value="50" min="5" max="1000">
+            </div>
+        </div>
+    </div>
+
+    <div class="map-and-table-container">
+        <div class="main-content">
+            <canvas id="mapCanvas" width="800" height="800"></canvas>
+        </div>
+        <div class="table-container">
+            <h3>Raportoidut Maalit</h3>
+            <table id="reportsTable">
+                <thead>
+                    <tr>
+                        <th>Aika</th>
+                        <th>Maali Nro</th>
+                        <th>MGRS</th>
+                        <th>Suunta</th>
+                        <th>Korkeus</th>
+                        <th>Nopeus</th>
+                        <th>Lkm</th>
+                        <th>Lisätiedot</th>
+                        <th>Toiminto</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
