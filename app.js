@@ -335,11 +335,11 @@ function drawGridAndLabels() {
 }
 
 function drawOwnPositionAndCircles(pt) {
-    ctx.fillStyle = 'blue';
-    ctx.fillRect(pt.x - 5, pt.y - 10, 10, 20); 
+    ctx.fillStyle = 'lightblue';
+    ctx.fillRect(pt.x - 10, pt.y - 0, 20, -13); 
     ctx.strokeStyle = 'white';
     ctx.lineWidth = 1;
-    ctx.strokeRect(pt.x - 5, pt.y - 10, 10, 20);
+    ctx.strokeRect(pt.x - 10, pt.y - 0, 20, -13);
 
     ctx.strokeStyle = 'orange';
     ctx.lineWidth = 2;
