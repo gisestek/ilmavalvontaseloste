@@ -23,7 +23,7 @@ Tämä on selainpohjainen ilmavalvontaselosteiden kirjaus- ja visualisointityök
 |----------------|-----------------------------------|
 | `index.html`   | Käyttöliittymä ja lomakkeet       |
 | `app.js`       | Sovelluksen logiikka ja piirto    |
-| `style.css`    | (valinnainen, tyylit voivat olla myös suoraan HTML:ssä) |
+| `style.css`    | Tyylit                            |
 
 ---
 
@@ -32,3 +32,4 @@ Tämä on selainpohjainen ilmavalvontaselosteiden kirjaus- ja visualisointityök
 1. Lataa tai kloonaa tämä repositorio:
    ```bash
    git clone https://github.com/kayttaja/ilmavalvontaseloste.git
+2. Suorita index.html
