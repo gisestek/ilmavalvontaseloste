@@ -92,8 +92,18 @@ def read_config_model():
 
 # --- Model listing (for the frontend's model selector) ---
 
+# Roughly smallest-to-largest, matching whisper.cpp's own naming. Anything
+# downloaded that isn't listed here (e.g. a future model name) sorts after,
+# alphabetically among itself.
+MODEL_SIZE_ORDER = [
+    "tiny.en", "tiny", "base.en", "base", "small.en", "small",
+    "medium.en", "medium", "large-v1", "large-v2", "large-v3-turbo", "large-v3",
+]
+
+
 def list_downloaded_models():
-    """Whisper ggml models actually present on disk (excludes the VAD model)."""
+    """Whisper ggml models actually present on disk (excludes the VAD model),
+    ordered smallest-to-largest rather than alphabetically."""
     models_dir = os.path.join(WHISPER_DIR, "models")
     try:
         files = os.listdir(models_dir)
@@ -103,7 +113,13 @@ def list_downloaded_models():
     for fname in files:
         if fname.startswith("ggml-") and fname.endswith(".bin") and "silero" not in fname:
             names.append(fname[len("ggml-"):-len(".bin")])
-    return sorted(names)
+
+    def sort_key(name):
+        if name in MODEL_SIZE_ORDER:
+            return (0, MODEL_SIZE_ORDER.index(name))
+        return (1, name)
+
+    return sorted(names, key=sort_key)
 
 
 def models_refresh_loop():

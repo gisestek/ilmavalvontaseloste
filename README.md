@@ -1,5 +1,7 @@
 # Ilmavalvontaselostesovellus
 
+![Ilmavalvontaseloste-sovellus](ivseloste.png)
+
 Tämä on ilmavalvontaselosteiden kirjaus- ja visualisointityökalu. Sovellus mahdollistaa ilmamaalien raportoinnin, karttanäkymän piirtämisen MGRS-ruudukon mukaan sekä varoitus- ja hälytyskehien käytön oman sijainnin ympärillä. Raportteja voi syöttää käsin lomakkeella, tai ne voivat tulla automaattisesti puheentunnistuksen kautta (esim. FM-radiolähetteen ilmavalvontaselosteesta).
 
 ---
