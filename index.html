@@ -71,6 +71,39 @@
                 <input type="number" id="alertRadiusInput" name="alertRadius" value="50" min="5" max="1000">
             </div>
         </div>
+
+        <div class="section">
+            <h3>Äänilähde (puheentunnistus)</h3>
+            <div class="input-group">
+                <label>Tila:</label>
+                <div class="pipeline-status-row">
+                    <span id="pipelineStatusDot" class="status-dot status-dot-off"></span>
+                    <span id="pipelineStatusText">Pysäytetty</span>
+                </div>
+                <button id="pipelineToggleBtn">Käynnistä kuuntelu</button>
+            </div>
+            <div class="input-group">
+                <label for="audioDeviceSelect">Mikrofoni / tulolähde:</label>
+                <select id="audioDeviceSelect">
+                    <option value="">(oletus)</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label>Äänitaso:</label>
+                <div id="vuMeter" class="vu-meter">
+                    <div id="vuMeterBar" class="vu-meter-bar"></div>
+                </div>
+            </div>
+            <div class="input-group">
+                <label>Tunnistettu puhe (debug):</label>
+                <div id="transcriptDebugView" class="transcript-debug"></div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>Tietokanta</h3>
+            <button id="clearDatabaseBtn" class="danger-btn">Tyhjennä tietokanta</button>
+        </div>
     </div>
 
     <div class="map-and-table-container">

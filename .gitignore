@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+
+# Runtime-generated data (see README - not version controlled)
+reports.json
+config.json
+devices.json
+level.json
+transcripts.json
+
+# Local audio test samples (sample.wav is kept as a committed test fixture)
+*.mp3

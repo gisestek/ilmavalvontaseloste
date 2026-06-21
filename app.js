@@ -43,6 +43,22 @@ window.onload = () => {
     // 3. Recalculate map origin to center ownPosition (if set) and draw everything
     recalculateMapOriginAndRedraw();
 
+    // 4. Start polling for voice-parsed reports
+    startReportPolling();
+
+    // 5. Audio device selector + VU meter
+    initAudioDeviceSelector();
+    startVuMeterPolling();
+
+    // 6. Pipeline start/stop control + heartbeat status
+    initPipelineControl();
+
+    // 7. Raw transcript debug view
+    startTranscriptDebugPolling();
+
+    // 8. Clear database button
+    initClearDatabaseButton();
+
     // --- Theme toggle ---
     const toggleThemeBtn = document.getElementById('toggleThemeBtn');
     toggleThemeBtn.addEventListener('click', () => {
@@ -120,6 +136,257 @@ if (ownPosition && ownPosition.canvasPt && report.canvasPt) {
     }
 }
 
+}
+
+// --- Voice-parsed report ingestion (polling) ---
+const REPORTS_POLL_URL = 'reports.json';
+const REPORTS_POLL_INTERVAL_MS = 2000;
+const seenReportTimestamps = new Set();
+
+function startReportPolling() {
+    setInterval(pollForParsedReports, REPORTS_POLL_INTERVAL_MS);
+}
+
+async function pollForParsedReports() {
+    let parsedReports;
+    try {
+        const response = await fetch(REPORTS_POLL_URL, { cache: 'no-store' });
+        if (!response.ok) return;
+        parsedReports = await response.json();
+    } catch (e) {
+        return; // server not running yet, or no reports.json - ignore silently
+    }
+
+    parsedReports.forEach(parsed => {
+        if (seenReportTimestamps.has(parsed.timestamp)) return;
+        seenReportTimestamps.add(parsed.timestamp);
+        addParsedReport(parsed);
+    });
+}
+
+function addParsedReport(parsed) {
+    const report = {
+        id: parsed.id,
+        mgrsRaw: parsed.mgrsRaw,
+        direction: parsed.direction,
+        altitude: parsed.altitude,
+        speed: parsed.speed,
+        count: parsed.count,
+        extra: parsed.extra,
+        timestamp: parsed.timestamp || Date.now(),
+        parsedMgrs: null,
+        canvasPt: null
+    };
+
+    report.parsedMgrs = parseMGRS(report.mgrsRaw);
+    if (!report.parsedMgrs) {
+        console.warn('Hylätty puheesta jäsennetty raportti, virheellinen MGRS:', parsed);
+        return;
+    }
+
+    report.canvasPt = mgrsToCanvasXY(report.parsedMgrs);
+
+    reports.push(report);
+    reports.sort((a, b) => a.timestamp - b.timestamp);
+
+    updateReportsTable();
+    redrawCanvas();
+
+    if (ownPosition && ownPosition.canvasPt && report.canvasPt) {
+        const dx = report.canvasPt.x - ownPosition.canvasPt.x;
+        const dy = report.canvasPt.y - ownPosition.canvasPt.y;
+        const distanceKm = Math.sqrt(dx * dx + dy * dy) / PIXELS_PER_KM;
+
+        if (distanceKm <= alertRadiusKm) {
+            alert(`⚠️ Hälytys! Maali ${report.id} on hälytyskehän (${alertRadiusKm} km) sisällä!`);
+        } else if (distanceKm <= warningRadiusKm) {
+            alert(`ℹ️ Varoitus: Maali ${report.id} on varoituskehän (${warningRadiusKm} km) sisällä.`);
+        }
+    }
+}
+
+// --- Audio device selector + VU meter ---
+const DEVICES_POLL_URL = 'devices.json';
+const LEVEL_POLL_URL = 'level.json';
+const CONFIG_POST_URL = 'config';
+const DEVICES_POLL_INTERVAL_MS = 5000;
+const VU_POLL_INTERVAL_MS = 250;
+
+function initAudioDeviceSelector() {
+    const select = document.getElementById('audioDeviceSelect');
+    select.addEventListener('change', () => {
+        fetch(CONFIG_POST_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ deviceId: select.value || null })
+        }).catch(() => {}); // backend pipeline may not be reachable yet - ignore
+    });
+
+    refreshAudioDeviceList();
+    setInterval(refreshAudioDeviceList, DEVICES_POLL_INTERVAL_MS);
+}
+
+async function refreshAudioDeviceList() {
+    const select = document.getElementById('audioDeviceSelect');
+    let data;
+    try {
+        const response = await fetch(DEVICES_POLL_URL, { cache: 'no-store' });
+        if (!response.ok) return;
+        data = await response.json();
+    } catch (e) {
+        return; // pipeline not running yet - keep showing the default option
+    }
+
+    const sources = data.sources || [];
+    const selectedId = data.selected || '';
+
+    // Avoid rebuilding (and losing focus) if the list hasn't actually changed
+    const currentIds = Array.from(select.options).map(o => o.value).join(',');
+    const newIds = ['', ...sources.map(s => s.id)].join(',');
+    if (currentIds === newIds && select.value === selectedId) return;
+
+    select.innerHTML = '<option value="">(oletus)</option>';
+    sources.forEach(source => {
+        const option = document.createElement('option');
+        option.value = source.id;
+        option.textContent = source.name;
+        select.appendChild(option);
+    });
+    select.value = selectedId;
+}
+
+function startVuMeterPolling() {
+    setInterval(updateVuMeter, VU_POLL_INTERVAL_MS);
+}
+
+async function updateVuMeter() {
+    const bar = document.getElementById('vuMeterBar');
+    try {
+        const response = await fetch(LEVEL_POLL_URL, { cache: 'no-store' });
+        if (!response.ok) return;
+        const data = await response.json();
+        const level = Math.max(0, Math.min(100, data.level || 0));
+        bar.style.width = level + '%';
+    } catch (e) {
+        bar.style.width = '0%'; // pipeline not running / no signal
+    }
+}
+
+// --- Pipeline start/stop control + heartbeat status ---
+const PIPELINE_STATUS_URL = 'pipeline/status';
+const PIPELINE_START_URL = 'pipeline/start';
+const PIPELINE_STOP_URL = 'pipeline/stop';
+const PIPELINE_STATUS_POLL_INTERVAL_MS = 1500;
+
+let pipelineIsRunning = false;
+let pipelineActionInFlight = false;
+
+function initPipelineControl() {
+    const btn = document.getElementById('pipelineToggleBtn');
+    btn.addEventListener('click', async () => {
+        if (pipelineActionInFlight) return;
+        pipelineActionInFlight = true;
+        btn.disabled = true;
+        try {
+            const url = pipelineIsRunning ? PIPELINE_STOP_URL : PIPELINE_START_URL;
+            const response = await fetch(url, { method: 'POST' });
+            if (response.ok) {
+                await refreshPipelineStatus();
+            }
+        } catch (e) {
+            // server not reachable - status poll will reflect reality on next tick
+        } finally {
+            pipelineActionInFlight = false;
+            btn.disabled = false;
+        }
+    });
+
+    refreshPipelineStatus();
+    setInterval(refreshPipelineStatus, PIPELINE_STATUS_POLL_INTERVAL_MS);
+}
+
+async function refreshPipelineStatus() {
+    const dot = document.getElementById('pipelineStatusDot');
+    const text = document.getElementById('pipelineStatusText');
+    const btn = document.getElementById('pipelineToggleBtn');
+
+    let status;
+    try {
+        const response = await fetch(PIPELINE_STATUS_URL, { cache: 'no-store' });
+        if (!response.ok) throw new Error('status not ok');
+        status = await response.json();
+    } catch (e) {
+        dot.className = 'status-dot status-dot-off';
+        text.textContent = 'Palvelimeen ei yhteyttä';
+        return;
+    }
+
+    pipelineIsRunning = !!status.running;
+    btn.textContent = pipelineIsRunning ? 'Pysäytä kuuntelu' : 'Käynnistä kuuntelu';
+
+    if (status.listening) {
+        dot.className = 'status-dot status-dot-listening';
+        text.textContent = 'Kuuntelee';
+    } else if (status.running) {
+        dot.className = 'status-dot status-dot-running';
+        text.textContent = 'Käynnistyy...';
+    } else {
+        dot.className = 'status-dot status-dot-off';
+        text.textContent = 'Pysäytetty';
+    }
+}
+
+// --- Raw transcript debug view ---
+const TRANSCRIPTS_POLL_URL = 'transcripts.json';
+const TRANSCRIPTS_POLL_INTERVAL_MS = 2000;
+let lastTranscriptTimestamp = 0;
+
+function startTranscriptDebugPolling() {
+    refreshTranscriptDebugView();
+    setInterval(refreshTranscriptDebugView, TRANSCRIPTS_POLL_INTERVAL_MS);
+}
+
+async function refreshTranscriptDebugView() {
+    const view = document.getElementById('transcriptDebugView');
+    let items;
+    try {
+        const response = await fetch(TRANSCRIPTS_POLL_URL, { cache: 'no-store' });
+        if (!response.ok) return;
+        items = await response.json();
+    } catch (e) {
+        return; // pipeline not running yet - leave previous content as-is
+    }
+
+    if (!items.length) {
+        view.innerHTML = '<div class="transcript-debug-entry">(ei tunnistettua puhetta vielä)</div>';
+        return;
+    }
+
+    const newestTimestamp = items[items.length - 1].timestamp;
+    if (newestTimestamp === lastTranscriptTimestamp) return; // nothing new, avoid re-render flicker
+    lastTranscriptTimestamp = newestTimestamp;
+
+    view.innerHTML = items.slice().reverse().map(item => {
+        const time = new Date(item.timestamp).toLocaleTimeString('fi-FI');
+        return `<div class="transcript-debug-entry"><span class="transcript-debug-time">${time}</span>${item.text}</div>`;
+    }).join('');
+}
+
+// --- Clear database ---
+function initClearDatabaseButton() {
+    const btn = document.getElementById('clearDatabaseBtn');
+    btn.addEventListener('click', async () => {
+        if (!confirm('Tyhjennetäänkö kaikki raportit? Tätä ei voi perua.')) return;
+        try {
+            await fetch('reports/clear', { method: 'POST' });
+        } catch (e) {
+            // even if the server call fails, clear local state below for consistency
+        }
+        reports = [];
+        seenReportTimestamps.clear();
+        updateReportsTable();
+        redrawCanvas();
+    });
 }
 
 function updateMapSettingsHandler() {
