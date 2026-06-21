@@ -124,15 +124,20 @@ class Handler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(length)
             try:
-                config = json.loads(body)
+                partial_config = json.loads(body)
             except json.JSONDecodeError:
                 self._send_json(400, {"error": "invalid json"})
                 return
 
             with _lock:
-                CONFIG_FILE.write_text(json.dumps(config, ensure_ascii=False), encoding="utf-8")
+                try:
+                    current_config = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+                except (FileNotFoundError, json.JSONDecodeError):
+                    current_config = {}
+                current_config.update(partial_config)
+                CONFIG_FILE.write_text(json.dumps(current_config, ensure_ascii=False), encoding="utf-8")
 
-            self._send_json(200, {"status": "ok"})
+            self._send_json(200, {"status": "ok", "config": current_config})
             return
 
         if self.path == "/pipeline/start":

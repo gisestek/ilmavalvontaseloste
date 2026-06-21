@@ -50,6 +50,10 @@ window.onload = () => {
     initAudioDeviceSelector();
     startVuMeterPolling();
 
+    // 5b. Whisper model selector + performance indicator
+    initModelSelector();
+    startModelPerfPolling();
+
     // 6. Pipeline start/stop control + heartbeat status
     initPipelineControl();
 
@@ -253,6 +257,86 @@ async function refreshAudioDeviceList() {
         select.appendChild(option);
     });
     select.value = selectedId;
+}
+
+// --- Whisper model selector + performance indicator ---
+const MODELS_POLL_URL = 'models.json';
+const PERF_POLL_URL = 'perf.json';
+const MODELS_POLL_INTERVAL_MS = 5000;
+const PERF_POLL_INTERVAL_MS = 3000;
+
+function initModelSelector() {
+    const select = document.getElementById('whisperModelSelect');
+    select.addEventListener('change', () => {
+        fetch(CONFIG_POST_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: select.value || null })
+        }).catch(() => {});
+    });
+
+    refreshModelList();
+    setInterval(refreshModelList, MODELS_POLL_INTERVAL_MS);
+}
+
+async function refreshModelList() {
+    const select = document.getElementById('whisperModelSelect');
+    let data;
+    try {
+        const response = await fetch(MODELS_POLL_URL, { cache: 'no-store' });
+        if (!response.ok) return;
+        data = await response.json();
+    } catch (e) {
+        return;
+    }
+
+    const models = data.models || [];
+    const selected = data.selected || '';
+
+    const currentIds = Array.from(select.options).map(o => o.value).join(',');
+    const newIds = ['', ...models].join(',');
+    if (currentIds === newIds && select.value === selected) return;
+
+    select.innerHTML = '<option value="">(oletus)</option>';
+    models.forEach(name => {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        select.appendChild(option);
+    });
+    select.value = selected;
+}
+
+function startModelPerfPolling() {
+    refreshModelPerf();
+    setInterval(refreshModelPerf, PERF_POLL_INTERVAL_MS);
+}
+
+async function refreshModelPerf() {
+    const indicator = document.getElementById('modelPerfIndicator');
+    let perf;
+    try {
+        const response = await fetch(PERF_POLL_URL, { cache: 'no-store' });
+        if (!response.ok) return;
+        perf = await response.json();
+    } catch (e) {
+        indicator.textContent = '';
+        return;
+    }
+
+    if (!perf.model) {
+        indicator.textContent = '';
+        return;
+    }
+
+    const text = `Tunnistusviive: ${perf.transcribeSeconds}s / ${perf.strideSeconds}s ikkuna (${perf.model})`;
+    indicator.textContent = text;
+    if (perf.overloaded) {
+        indicator.className = 'model-perf model-perf-overloaded';
+        indicator.textContent += ' — malli on liian raskas tälle laitteelle, kuuntelu jää jälkeen reaaliajasta. Valitse pienempi malli.';
+    } else {
+        indicator.className = 'model-perf model-perf-ok';
+    }
 }
 
 function startVuMeterPolling() {

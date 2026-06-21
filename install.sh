@@ -9,7 +9,11 @@ set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WHISPER_DIR="$HOME/whisper.cpp"
-WHISPER_MODEL="small"
+# Downloaded by default so the model can be switched from the web UI without
+# rerunning this script. See README "Laitteistovaatimukset" for guidance on
+# which model fits which hardware. Add "large-v3" here too if you have 8GB+
+# RAM and want the highest accuracy for offline/spot-check use.
+WHISPER_MODELS="tiny base small"
 VAD_MODEL="silero-v5.1.2"
 SERVICE_NAME="ilmavalvontaseloste"
 
@@ -43,12 +47,14 @@ fi
 
 cd "$WHISPER_DIR"
 
-if [ ! -f "models/ggml-${WHISPER_MODEL}.bin" ]; then
-    echo "==> Ladataan Whisper-malli (${WHISPER_MODEL})..."
-    bash ./models/download-ggml-model.sh "$WHISPER_MODEL"
-else
-    echo "==> Whisper-malli on jo ladattu."
-fi
+for model in $WHISPER_MODELS; do
+    if [ ! -f "models/ggml-${model}.bin" ]; then
+        echo "==> Ladataan Whisper-malli (${model})..."
+        bash ./models/download-ggml-model.sh "$model"
+    else
+        echo "==> Whisper-malli ${model} on jo ladattu."
+    fi
+done
 
 if [ ! -f "models/ggml-${VAD_MODEL}.bin" ]; then
     echo "==> Ladataan VAD-malli (${VAD_MODEL})..."

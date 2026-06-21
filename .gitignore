@@ -6,7 +6,9 @@ __pycache__/
 reports.json
 config.json
 devices.json
+models.json
 level.json
+perf.json
 transcripts.json
 
 # Local audio test samples (sample.wav is kept as a committed test fixture)

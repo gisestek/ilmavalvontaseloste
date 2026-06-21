@@ -31,7 +31,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from parser import split_into_reports, is_usable, send_to_app  # noqa: E402
 
 WHISPER_DIR = os.path.expanduser("~/whisper.cpp")
-MODEL = f"{WHISPER_DIR}/models/ggml-small.bin"
+DEFAULT_MODEL = "small"
 VAD_MODEL = f"{WHISPER_DIR}/models/ggml-silero-v5.1.2.bin"
 WHISPER_BIN = f"{WHISPER_DIR}/build/bin/whisper-cli"
 THREADS = "8"
@@ -40,8 +40,10 @@ WAKE_WORD = "maali"
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(APP_DIR, "config.json")
 DEVICES_FILE = os.path.join(APP_DIR, "devices.json")
+MODELS_FILE = os.path.join(APP_DIR, "models.json")
 LEVEL_FILE = os.path.join(APP_DIR, "level.json")
 TRANSCRIPTS_FILE = os.path.join(APP_DIR, "transcripts.json")
+PERF_FILE = os.path.join(APP_DIR, "perf.json")
 MAX_TRANSCRIPTS = 30
 
 ROLLING_WAV = "/tmp/rolling.wav"
@@ -72,12 +74,48 @@ def start_rolling_recorder(device_id=None):
     return subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-def read_config_device_id():
+def read_config():
     try:
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            return json.load(f).get("deviceId") or None
+            return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
-        return None
+        return {}
+
+
+def read_config_device_id():
+    return read_config().get("deviceId") or None
+
+
+def read_config_model():
+    return read_config().get("model") or DEFAULT_MODEL
+
+
+# --- Model listing (for the frontend's model selector) ---
+
+def list_downloaded_models():
+    """Whisper ggml models actually present on disk (excludes the VAD model)."""
+    models_dir = os.path.join(WHISPER_DIR, "models")
+    try:
+        files = os.listdir(models_dir)
+    except OSError:
+        return []
+    names = []
+    for fname in files:
+        if fname.startswith("ggml-") and fname.endswith(".bin") and "silero" not in fname:
+            names.append(fname[len("ggml-"):-len(".bin")])
+    return sorted(names)
+
+
+def models_refresh_loop():
+    while not _stop_event.is_set():
+        try:
+            models = list_downloaded_models()
+            selected = read_config_model()
+            with open(MODELS_FILE, "w", encoding="utf-8") as f:
+                json.dump({"models": models, "selected": selected}, f)
+        except Exception:
+            pass
+        _stop_event.wait(DEVICE_REFRESH_SECONDS)
 
 
 # --- Device listing (for the frontend's device selector) ---
@@ -192,12 +230,27 @@ def extract_tail_slice(src_path, dst_path, window_seconds):
     return os.path.exists(dst_path)
 
 
-def transcribe(path):
+def transcribe(path, model_name):
+    model_path = f"{WHISPER_DIR}/models/ggml-{model_name}.bin"
+    started_at = time.time()
     result = subprocess.run(
-        [WHISPER_BIN, "-m", MODEL, "-f", path, "-l", "fi", "-t", THREADS,
+        [WHISPER_BIN, "-m", model_path, "-f", path, "-l", "fi", "-t", THREADS,
          "-nt", "--vad", "-vm", VAD_MODEL],
         capture_output=True, text=True,
     )
+    elapsed = time.time() - started_at
+
+    try:
+        with open(PERF_FILE, "w", encoding="utf-8") as f:
+            json.dump({
+                "model": model_name,
+                "transcribeSeconds": round(elapsed, 2),
+                "strideSeconds": STRIDE_SECONDS,
+                "overloaded": elapsed > STRIDE_SECONDS,
+            }, f)
+    except OSError:
+        pass
+
     lines = [
         line.strip() for line in result.stdout.splitlines()
         if line.strip() and not line.startswith(IGNORE_PREFIXES)
@@ -232,9 +285,10 @@ def main():
     signal.signal(signal.SIGTERM, _handle_sigterm)
 
     print(f"Live pipeline started. window={WINDOW_SECONDS}s stride={STRIDE_SECONDS}s "
-          f"model={os.path.basename(MODEL)}", flush=True)
+          f"default_model={DEFAULT_MODEL}", flush=True)
 
     threading.Thread(target=devices_refresh_loop, daemon=True).start()
+    threading.Thread(target=models_refresh_loop, daemon=True).start()
     threading.Thread(target=level_refresh_loop, daemon=True).start()
 
     current_device_id = read_config_device_id()
@@ -262,7 +316,7 @@ def main():
             if not extract_tail_slice(ROLLING_WAV, slice_path, WINDOW_SECONDS):
                 continue
 
-            text = transcribe(slice_path)
+            text = transcribe(slice_path, read_config_model())
             if not text:
                 continue
 

@@ -19,6 +19,41 @@ Tämä on ilmavalvontaselosteiden kirjaus- ja visualisointityökalu. Sovellus ma
 - ▶️/⏹️ Kuuntelun käynnistys/pysäytys sivulta, tilan/sykkeen ilmaisin
 - 🐞 Debug-näkymä, joka näyttää raa'an tunnistetun puheen riippumatta siitä, jäsentyikö se raportiksi
 - 🗑️ "Tyhjennä tietokanta" -nappi
+- 🧠 Whisper-mallin valinta sivulta + suorituskykymittari, joka varoittaa jos valittu malli on laitteelle liian raskas
+
+---
+
+## 💻 Laitteistovaatimukset
+
+Puheentunnistus on huomattavasti raskain osa sovellusta — selain ja kartta toimivat kevyestikin millä tahansa koneella, mutta Whisper-puheentunnistus on prosessoririippuvainen.
+
+**Ehdottomat vaatimukset:**
+- Linux PipeWire-äänijärjestelmällä (esim. tuore Ubuntu/Debian-työpöytä). `pw-record`/`wpctl` täytyy löytyä.
+- 64-bit x86 (AMD64) -suoritin. **AVX2-tuki on käytännössä pakollinen** — sitä vanhemmilla suorittimilla (esim. 2010-luvun alun mobiiliprosessorit) puheentunnistus on jopa 25–50x hitaampaa, eikä reaaliaikainen kuuntelu ole käytännössä mahdollista millään mallilla.
+- Vähintään ~1 GB vapaata RAM-muistia `small`-mallille, enemmän isommille malleille (ks. taulukko alla).
+
+**Mitatut suorituskykytulokset** (29 s ääninäyte, `whisper.cpp`):
+
+| Kone | Mallit | Tulos |
+|---|---|---|
+| 2010-luvun mobiili-i5 (ei AVX2), 1 ydin | `base` | ~280 s → **2.4x hitaampi kuin reaaliaika** ❌ |
+| 2010-luvun mobiili-i5 (ei AVX2), 4 ydintä | `base` | 71 s → **2.4x hitaampi kuin reaaliaika** ❌ |
+| Moderni 8-ydin (AVX2), `base` | `base` | 2.3 s → **12.6x nopeampi kuin reaaliaika** ✅ |
+| Moderni 8-ydin (AVX2), `small` | `small` | 7.2 s → **4x nopeampi kuin reaaliaika** ✅ |
+| Moderni 8-ydin (AVX2), `large-v3` | `large-v3` | 42 s → **1.4x hitaampi kuin reaaliaika** ⚠️ |
+
+Johtopäätös: **AVX2-tuki ratkaisee enemmän kuin ydinmäärä.** Ydinmäärän kasvattaminen ei skaalaa lineaarisesti (4 ydintä ≈ 1.7x nopeutus, ei 4x), mutta AVX2-tuettu moderni suoritin on kertaluokkaa nopeampi samalla ydinmäärällä.
+
+### Minkä mallin pitäisi valita?
+
+Malli valitaan ajonaikaisesti sivun "Äänilähde"-osiosta, ei asennusvaiheessa — `install.sh` lataa oletuksena `tiny`, `base` ja `small` mallit valmiiksi, joten niiden välillä voi kokeilla ja vaihtaa ilman uudelleenasennusta.
+
+- **`small` on suositeltu oletus** modernille (AVX2) koneelle: hyvä tarkkuus, paljon reaaliaikamarginaalia.
+- **`base`** jos haluat enemmän marginaalia (esim. ajat samalla muita raskaita prosesseja koneella) — tarkkuus hieman heikompi mutta yhä käyttökelpoinen.
+- **`tiny`** vain hyvin heikolle laitteistolle tai nopeaan testaukseen — numerot/koodisanat menevät usein väärin, ei suositella tuotantokäyttöön.
+- **`large-v3`** parhaaseen tarkkuuteen, mutta ei reaaliaikainen tavallisella kannettavalla (~1.4x hitaampi kuin reaaliaika) — hyvä esim. jälkikäteen tarkistettavaan offline-litterointiin, ei jatkuvaan kuunteluun. Vaatii myös ~4 GB RAM-muistia mallin lataamiseen.
+
+**Miten tiedän, että malli on liian raskas?** Sivun "Äänilähde"-osiossa näkyy malliarvioinnin alla suorituskykymittari ("Tunnistusviive: X s / Y s ikkuna"). Jos viive ylittää ikkunan pituuden (oletuksena 10 s), mittari muuttuu punaiseksi ja varoittaa — se tarkoittaa, että puheentunnistus jää jatkuvasti jälkeen todellisesta puheesta, ja malli kannattaa vaihtaa pienempään.
 
 ---
 
@@ -30,11 +65,11 @@ Tämä on ilmavalvontaselosteiden kirjaus- ja visualisointityökalu. Sovellus ma
 | `app.js`              | Sovelluksen logiikka, piirto ja puheraporttien vastaanotto (polling) |
 | `style.css`           | Tyylit                                                              |
 | `server.py`           | Paikallinen HTTP-palvelin (vain `127.0.0.1`): tarjoaa staattiset tiedostot, `reports.json`-rajapinnan sekä puheputken käynnistys/pysäytys-rajapinnan |
-| `live_pipeline.py`    | Jatkuva äänenkäsittely: mikrofoni → Whisper (VAD) → jäsennys → raportin lähetys palvelimelle. Kirjoittaa myös `devices.json`, `level.json` (VU-mittari) ja `transcripts.json` (debug) |
+| `live_pipeline.py`    | Jatkuva äänenkäsittely: mikrofoni → Whisper (VAD) → jäsennys → raportin lähetys palvelimelle. Kirjoittaa myös `devices.json`, `models.json`, `level.json` (VU-mittari), `perf.json` (suorituskykymittari) ja `transcripts.json` (debug) |
 | `parser.py`           | Jäsentää puheentunnistuksen tekstin rakenteelliseksi raportiksi (ks. raporttimuoto alla) |
 | `install.sh`          | Asennusskripti: järjestelmäriippuvuudet, whisper.cpp + mallit, äänioikeudet, systemd-palvelu |
 
-Ajonaikaisesti syntyvät tiedostot (`reports.json`, `config.json`, `devices.json`, `level.json`, `transcripts.json`) eivät kuulu versionhallintaan.
+Ajonaikaisesti syntyvät tiedostot (`reports.json`, `config.json`, `devices.json`, `models.json`, `level.json`, `perf.json`, `transcripts.json`) eivät kuulu versionhallintaan.
 
 ---
 
@@ -43,7 +78,7 @@ Ajonaikaisesti syntyvät tiedostot (`reports.json`, `config.json`, `devices.json
 Vaatii Linux-koneen, jossa on PipeWire-äänijärjestelmä (esim. tuore Ubuntu/Debian-työpöytä) ja mikrofoni. Whisper.cpp käännetään paikallisesti, joten suorittimen AVX2-tuki nopeuttaa puheentunnistusta merkittävästi.
 
 ```bash
-git clone https://github.com/kayttaja/ilmavalvontaseloste.git
+git clone https://github.com/gisestek/ilmavalvontaseloste.git
 cd ilmavalvontaseloste
 ./install.sh
 ```
@@ -53,7 +88,7 @@ cd ilmavalvontaseloste
 1. Asentaa järjestelmäpaketit (build-essential, cmake, ffmpeg, PipeWire/WirePlumber, python3)
 2. Lisää käyttäjän `audio`-ryhmään (mikrofonin käyttöoikeus)
 3. Ottaa käyttöön systemd-lingeringin (palvelin pysyy käynnissä uloskirjautumisen jälkeen)
-4. Kloonaa ja kääntää [whisper.cpp](https://github.com/ggerganov/whisper.cpp):n, lataa `small`-puheentunnistusmallin ja Silero VAD -mallin
+4. Kloonaa ja kääntää [whisper.cpp](https://github.com/ggerganov/whisper.cpp):n, lataa `tiny`/`base`/`small`-puheentunnistusmallit ja Silero VAD -mallin (mallia voi vaihtaa jälkikäteen sivulta, ks. "Laitteistovaatimukset" yllä)
 5. Asentaa ja käynnistää systemd-käyttäjäpalvelun (`ilmavalvontaseloste.service`), joka pyörittää `server.py`:tä
 
 Asennuksen jälkeen sovellus on osoitteessa **http://127.0.0.1:8642/** (vain paikallinen kone — ei verkkoon näkyvä).
